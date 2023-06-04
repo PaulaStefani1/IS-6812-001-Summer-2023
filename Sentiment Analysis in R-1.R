@@ -238,3 +238,90 @@ model2 <- lm(rating ~ Is_Response+ hotel_name+word_count +ave_sentiment, data = 
 summary(model2)
 
 
+
+library(tidyverse)
+
+reviews<-read_csv("amazon_reviews.csv")
+
+library(quanteda)
+test.lexicon <- dictionary(list(positive.terms = c("happy", "excited", "great","easy","glad"),
+                                negative.terms = c("disappointed", "terrible", "reset", "reboots", "annoyed")))
+
+dfm_sentiment1 <- reviews$text %>% tokens() %>% dfm() %>% dfm_lookup(dictionary = test.lexicon)
+dfm_sentiment1
+
+dfm_sentiment_df<-convert(dfm_sentiment1, 'data.frame')
+dfm_sentiment_df$net<-(dfm_sentiment_df$positive)-(dfm_sentiment_df$negative)
+summary(dfm_sentiment_df)# document level summary
+
+################################################
+
+library("quanteda.dictionaries")
+output_mfd <- liwcalike(reviews$text,
+                        dictionary = data_dictionary_MFD)
+head(output_mfd)
+#########################################################
+
+# Proportions instead of numbers
+
+dfm_sentiment_prop <- dfm_weight(dfm_sentiment1, scheme = "prop")
+dfm_sentiment_prop
+
+## Plotting the sentiments
+
+
+sentiment <- convert(dfm_sentiment_prop, "data.frame") %>%
+    gather(positive.terms, negative.terms, key = "Polarity", value = "Share") %>% 
+    mutate(document = as_factor(doc_id)) %>% 
+    rename(Review = document)
+
+senti20<-sample_n(sentiment, 20)
+ggplot(senti20, aes(Review, Share, fill = Polarity, group = Polarity)) + 
+    geom_bar(stat='identity', position = position_dodge(), size = 1) + 
+    scale_fill_brewer(palette = "Set1") + 
+    theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) + 
+    ggtitle("Sentiment scores in Hotel Reviews (relative)")
+
+
+########################################
+
+library(sentimentr)
+mytext <- get_sentences(reviews$text)
+head(sentiment(mytext))
+
+
+## By sentence sentiment for each rating category
+out <- with(
+    reviews, 
+    sentiment_by(
+        get_sentences(text), # Reviews are stored in variable text
+        list(rating) # grouping variables
+    ))
+head(out)
+
+#### We want to find out what brands are mentioned in the review context (Use nouns for feature level analysis)
+
+library(tidyverse)
+library(cleanNLP)
+
+cnlp_init_udpipe() # Loading namespace: udpipe which serves backend to cleanNLP
+
+reviews_sample<-sample_n(reviews,100)
+# take a small sample as POS 
+#tagging is very resource intensive
+
+postag<-reviews_sample %>% 
+    cnlp_annotate(text= "text") # Outcome is list of tokens and documents
+
+head(postag$token,n=10)
+
+postag$token %>%
+    filter(xpos == "NNP") %>% # you can play around with different POS
+    group_by(lemma) %>%
+    summarize(count = n()) %>%
+    top_n(n = 10, count) %>%
+    arrange(desc(count)) 
+
+
+
+
